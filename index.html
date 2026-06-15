@@ -184,7 +184,20 @@
   <div id="status-bar"></div>
 
   <!-- 触屏按键 -->
-  <div id="touch-buttons"></div>
+  <div id="touch-buttons">
+    <button class="touch-btn t1-btn" data-task="t1" data-key="f" id="btn-t1-pres">
+      F<span class="label">有T</span>
+    </button>
+    <button class="touch-btn t1-btn" data-task="t1" data-key="j" id="btn-t1-abs">
+      J<span class="label">无T</span>
+    </button>
+    <button class="touch-btn t2-btn" data-task="t2" data-key="f" id="btn-t2-odd">
+      F<span class="label">奇数</span>
+    </button>
+    <button class="touch-btn t2-btn" data-task="t2" data-key="j" id="btn-t2-even">
+      J<span class="label">偶数</span>
+    </button>
+  </div>
 </div>
 
 <script>
@@ -197,36 +210,39 @@ const CONFIG = {
 
   SOA_LEVELS: [50, 150, 500],             // ms
   AUDIO_TYPES: ['white_noise', 'speech'],
-  STIM_DURATION: 200,                      // ms
+  STIM_DURATION_T1: 500,                  // T1字母矩阵 500ms
+  STIM_DURATION_T2: 200,                  // T2数字 200ms
   FIX_MIN: 500, FIX_MAX: 1000,            // 注视点抖动范围 ms
   ITI: 200,                                // 试次间隔 ms
   RESPONSE_TIMEOUT: 3000,                  // 反应超时 ms
   PRACTICE_TRIALS: 12,
   TRIALS_PER_CONDITION: 30,
 
-  // 按键映射
+  // 按键映射（两个任务都用F/J，按顺序区分）
   KEYS: {
-    T1_PRESENT: 'f',
-    T1_ABSENT:  'j',
-    T2_ODD:     'ArrowUp',
-    T2_EVEN:    'ArrowDown',
+    T1_PRESENT: 'f',    // 有T → F
+    T1_ABSENT:  'j',    // 无T → J
+    T2_ODD:     'f',    // 奇数 → F
+    T2_EVEN:    'j',    // 偶数 → J
     CONTINUE:   ' ',
   },
 
   // 指导语
   INSTRUCTION: [
     '欢迎参加本实验。\n\n',
-    '本实验包含两个视觉任务，请同时完成。\n\n',
+    '本实验包含两个视觉任务，请按顺序完成。\n\n',
     '任务一：每个试次会出现一个 3×3 的字母矩阵，请判断矩阵中是否包含字母 T。\n',
     '  · 含有 T → 按【F】键\n',
     '  · 不含 T → 按【J】键\n\n',
     '任务二：随后屏幕中央会出现一个数字，请判断该数字的奇偶性。\n',
-    '  · 奇数 → 按【↑】键\n',
-    '  · 偶数 → 按【↓】键\n\n',
+    '  · 奇数 → 按【F】键\n',
+    '  · 偶数 → 按【J】键\n\n',
     '注意事项：\n',
-    '1. 全程忽略耳机中的背景声音，无需对声音做任何反应；\n',
-    '2. 看到每个刺激后请立即按键，不要等待下一个刺激出现；\n',
-    '3. 两个任务均需尽快、尽量准确地完成。\n\n',
+    '1. 两个任务【都使用 F 和 J 键】，请严格按照顺序：\n',
+    '   先按 F/J 回答矩阵（任务一），再按 F/J 回答数字（任务二）；\n',
+    '2. 全程忽略耳机中的背景声音，无需对声音做任何反应；\n',
+    '3. 看到每个刺激后请立即按键，不要等待；\n',
+    '4. 两个任务均需尽快、尽量准确地完成。\n\n',
     '实验共分两部分，中途有休息。每部分约需 3 分钟。\n\n',
     '如有疑问，请在实验开始前告知主试。\n\n',
     '准备好后，按空格键开始练习阶段。\n',
@@ -236,8 +252,8 @@ const CONFIG = {
     '现在进入练习阶段，共 12 个试次，帮助你熟悉操作流程。\n\n',
     '练习阶段不播放背景音频，正确完成后方可进入正式实验。\n\n',
     '流程提示：\n',
-    '  · 屏幕中央出现"+"注视点 → 字母矩阵出现（判断是否有T）→ 数字出现（判断奇偶）\n',
-    '  · 两次按键可不分先后，反应窗口共 3000ms\n\n',
+    '  · 屏幕中央出现"+"注视点 → 字母矩阵出现（先按F/J判断T）→ 数字出现（再按F/J判断奇偶）\n',
+    '  · 必须按顺序：先任务一，再任务二。反应窗口共 3000ms\n\n',
     '如有不明白的地方，现在可以询问主试。\n\n',
     '按空格键开始练习。\n',
   ].join(''),
@@ -322,6 +338,7 @@ class ResponseCollector {
     this.t2 = null;            // { key, rt }
     this.t1Onset = null;
     this.t2Onset = null;
+    this._firstDone = false;   // 第一按(F/J)已收到 → 任务一
     this._resolve = null;
     this._handler = null;
     this._timer = null;
@@ -332,47 +349,48 @@ class ResponseCollector {
     this.t1Onset = t1Onset;
     this.t1 = null; this.t2 = null;
     this.t2Onset = null;
+    this._firstDone = false;
 
     return new Promise(resolve => {
       this._resolve = resolve;
 
-      // 键盘监听
+      // 键盘：两个任务都用 F/J，靠顺序区分
       this._handler = e => {
         if (e.repeat) return;
+        if (e.key !== 'f' && e.key !== 'j') return;
         const now = performance.now();
 
-        // T1: F / J
-        if ((e.key === 'f' || e.key === 'j') && !this.t1) {
-          this.t1 = { key: e.key, rt: now - this.t1Onset };
+        if (!this._firstDone) {
+          // 第一按 F/J → 任务一
+          this._firstDone = true;
+          this.t1 = { key: e.key, rt: Math.round(now - this.t1Onset) };
+        } else if (this.t2Onset) {
+          // 第二按 F/J（且在T2出现后）→ 任务二
+          this.t2 = { key: e.key, rt: Math.round(now - this.t2Onset) };
+          this._finish();
         }
-        // T2: ↑ / ↓
-        if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !this.t2 && this.t2Onset) {
-          this.t2 = { key: e.key, rt: now - this.t2Onset };
-        }
-        this._checkDone();
+        // 第二按在T2出现前 → 忽略（被试需等待T2再按）
       };
       document.addEventListener('keydown', this._handler);
 
-      // 触屏按钮监听
+      // 触屏按钮
       this._touchHandler = e => {
         const btn = e.currentTarget;
         const now = performance.now();
-        const task = btn.dataset.task;
         const key = btn.dataset.key;
 
-        if (task === 't1' && !this.t1) {
-          this.t1 = { key, rt: now - this.t1Onset };
+        if (!this._firstDone) {
+          this._firstDone = true;
+          this.t1 = { key, rt: Math.round(now - this.t1Onset) };
+        } else if (this.t2Onset) {
+          this.t2 = { key, rt: Math.round(now - this.t2Onset) };
+          this._finish();
         }
-        if (task === 't2' && !this.t2 && this.t2Onset) {
-          this.t2 = { key, rt: now - this.t2Onset };
-        }
-        this._checkDone();
       };
       document.querySelectorAll('.touch-btn').forEach(b => {
         b.addEventListener('click', this._touchHandler);
       });
 
-      // 触屏按钮显示（移动端）
       el.touchBtns.classList.add('active');
 
       // 超时
@@ -382,10 +400,6 @@ class ResponseCollector {
 
   setT2Onset(t2Onset) {
     this.t2Onset = t2Onset;
-  }
-
-  _checkDone() {
-    if (this.t1 && this.t2) this._finish();
   }
 
   _finish() {
@@ -574,15 +588,15 @@ async function runOneTrial(trial) {
   collector.setT2Onset(t2Onset);
 
   // ====== 刺激关闭时序 ======
-  // T1 在 onset 后 200ms 关闭
+  // T1 在 onset 后 500ms 关闭
   const t1Elapsed = performance.now() - t1Onset;
-  const t1Remaining = CONFIG.STIM_DURATION - t1Elapsed;
+  const t1Remaining = CONFIG.STIM_DURATION_T1 - t1Elapsed;
   if (t1Remaining > 0) await sleep(t1Remaining);
   hide(el.t1);
 
   // T2 在 onset 后 200ms 关闭
   const t2Elapsed = performance.now() - t2Onset;
-  const t2Remaining = CONFIG.STIM_DURATION - t2Elapsed;
+  const t2Remaining = CONFIG.STIM_DURATION_T2 - t2Elapsed;
   if (t2Remaining > 0) await sleep(t2Remaining);
   hide(el.t2);
 
@@ -597,7 +611,7 @@ async function runOneTrial(trial) {
   const expectedT1 = trial.hasT ? 'f' : 'j';
   const t1Correct = responses.t1 ? (responses.t1.key === expectedT1 ? 1 : 0) : 0;
   const isOdd = trial.digit % 2 === 1;
-  const expectedT2 = isOdd ? 'ArrowUp' : 'ArrowDown';
+  const expectedT2 = isOdd ? 'f' : 'j';
   const t2Correct = responses.t2 ? (responses.t2.key === expectedT2 ? 1 : 0) : 0;
 
   return {
