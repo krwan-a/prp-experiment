@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>听觉语义干扰对双任务中枢加工资源的影响</title>
+<style>
+  /* ======== 全局重置 ======== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #000;
+    color: #fff;
+    font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ======== 实验容器 ======== */
+  #experiment {
+    position: relative;
+    width: 100vw; height: 100vh;
+    display: flex; justify-content: center; align-items: center;
+  }
+
+  /* ======== 文本屏幕（指导语/说明/结束） ======== */
+  #text-screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px;
+    z-index: 100;
+    background: #000;
+  }
+  #text-screen .content {
+    max-width: 800px;
+    font-size: 24px;
+    line-height: 1.8;
+    text-align: left;
+    white-space: pre-wrap;
+    color: #eee;
+  }
+  #text-screen .hint {
+    margin-top: 40px;
+    font-size: 20px;
+    color: #999;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1.0; }
+  }
+
+  /* ======== 刺激呈现层 ======== */
+  #stimulus-layer {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 50;
+    pointer-events: none;
+  }
+
+  .stimulus {
+    position: absolute;
+    display: none;
+  }
+  .stimulus.visible { display: block; }
+
+  /* 注视点 */
+  #fixation {
+    font-size: 80px;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  /* T1: 字母矩阵 */
+  #t1-stim {
+    width: 500px;
+    height: 500px;
+    object-fit: contain;
+  }
+
+  /* T2: 数字 */
+  #t2-stim {
+    width: 250px;
+    height: 250px;
+    object-fit: contain;
+  }
+
+  /* ======== 底部状态栏 ======== */
+  #status-bar {
+    position: absolute;
+    bottom: 30px;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 20px;
+    color: #666;
+    z-index: 60;
+    pointer-events: none;
+  }
+
+  /* ======== 手机端触屏按键 ======== */
+  #touch-buttons {
+    position: absolute;
+    bottom: 100px;
+    left: 0; right: 0;
+    display: none;
+    justify-content: center;
+    gap: 20px;
+    z-index: 200;
+    padding: 0 20px;
+  }
+  #touch-buttons.active { display: flex; }
+
+  .touch-btn {
+    padding: 18px 36px;
+    font-size: 22px;
+    font-weight: bold;
+    border: 2px solid #888;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    cursor: pointer;
+    touch-action: manipulation;
+    min-width: 100px;
+    text-align: center;
+  }
+  .touch-btn:active { background: rgba(255,255,255,0.3); }
+  .touch-btn .label {
+    display: block;
+    font-size: 13px;
+    color: #aaa;
+    font-weight: normal;
+    margin-top: 4px;
+  }
+  .touch-btn.t1-btn { border-color: #5a9; }
+  .touch-btn.t2-btn { border-color: #a95; }
+
+  /* ======== 进度条 ======== */
+  #progress-container {
+    display: none;
+  }
+
+  /* ======== 响应式适配 ======== */
+  @media (max-width: 768px) {
+    #text-screen .content { font-size: 18px; padding: 20px; }
+    #text-screen .hint   { font-size: 16px; }
+    #t1-stim { width: 300px; height: 300px; }
+    #t2-stim { width: 160px; height: 160px; }
+    .touch-btn { padding: 14px 24px; font-size: 18px; min-width: 80px; }
+    #status-bar { font-size: 16px; bottom: 170px; }
+  }
+  @media (max-width: 480px) {
+    #text-screen .content { font-size: 15px; }
+    #t1-stim { width: 240px; height: 240px; }
+    #t2-stim { width: 130px; height: 130px; }
+    .touch-btn { padding: 12px 18px; font-size: 16px; min-width: 65px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="experiment">
+  <!-- 文本屏幕 -->
+  <div id="text-screen">
+    <div class="content" id="text-content"></div>
+    <div class="hint" id="text-hint">按【空格键】继续</div>
+  </div>
+
+  <!-- 刺激层 -->
+  <div id="stimulus-layer">
+    <div id="fixation" class="stimulus">+</div>
+    <img id="t1-stim" class="stimulus" src="" alt="">
+    <img id="t2-stim" class="stimulus" src="" alt="">
+  </div>
+
+  <!-- 状态栏 -->
+  <div id="status-bar"></div>
+
+  <!-- 触屏按键 -->
+  <div id="touch-buttons"></div>
+</div>
+
+<script>
+// ═════════════════════════════════════════════════════════════════════
+//  第1部分：实验配置
+// ═════════════════════════════════════════════════════════════════════
+
+const CONFIG = {
+  ASSETS_BASE: 'assets',
+
+  SOA_LEVELS: [50, 150, 500],             // ms
+  AUDIO_TYPES: ['white_noise', 'speech'],
+  STIM_DURATION: 200,                      // ms
+  FIX_MIN: 500, FIX_MAX: 1000,            // 注视点抖动范围 ms
+  ITI: 200,                                // 试次间隔 ms
+  RESPONSE_TIMEOUT: 3000,                  // 反应超时 ms
+  PRACTICE_TRIALS: 12,
+  TRIALS_PER_CONDITION: 30,
+
+  // 按键映射
+  KEYS: {
+    T1_PRESENT: 'f',
+    T1_ABSENT:  'j',
+    T2_ODD:     'ArrowUp',
+    T2_EVEN:    'ArrowDown',
+    CONTINUE:   ' ',
+  },
+
+  // 指导语
+  INSTRUCTION: [
+    '欢迎参加本实验。\n\n',
+    '本实验包含两个视觉任务，请同时完成。\n\n',
+    '任务一：每个试次会出现一个 3×3 的字母矩阵，请判断矩阵中是否包含字母 T。\n',
+    '  · 含有 T → 按【F】键\n',
+    '  · 不含 T → 按【J】键\n\n',
+    '任务二：随后屏幕中央会出现一个数字，请判断该数字的奇偶性。\n',
+    '  · 奇数 → 按【↑】键\n',
+    '  · 偶数 → 按【↓】键\n\n',
+    '注意事项：\n',
+    '1. 全程忽略耳机中的背景声音，无需对声音做任何反应；\n',
+    '2. 看到每个刺激后请立即按键，不要等待下一个刺激出现；\n',
+    '3. 两个任务均需尽快、尽量准确地完成。\n\n',
+    '实验共分两部分，中途有休息。每部分约需 3 分钟。\n\n',
+    '如有疑问，请在实验开始前告知主试。\n\n',
+    '准备好后，按空格键开始练习阶段。\n',
+  ].join(''),
+
+  PRACTICE_INSTRUCTION: [
+    '现在进入练习阶段，共 12 个试次，帮助你熟悉操作流程。\n\n',
+    '练习阶段不播放背景音频，正确完成后方可进入正式实验。\n\n',
+    '流程提示：\n',
+    '  · 屏幕中央出现"+"注视点 → 字母矩阵出现（判断是否有T）→ 数字出现（判断奇偶）\n',
+    '  · 两次按键可不分先后，反应窗口共 3000ms\n\n',
+    '如有不明白的地方，现在可以询问主试。\n\n',
+    '按空格键开始练习。\n',
+  ].join(''),
+
+  PRACTICE_DONE: [
+    '练习完成！\n\n',
+    '即将开始正式实验（共两部分，中间有休息）。\n\n',
+    '始终保持：\n',
+    '  · 见刺激立即按键\n',
+    '  · 忽略背景声音\n\n',
+    '按【空格键】继续。\n',
+  ].join(''),
+
+  BREAK_MSG: [
+    '休息时间 ~\n\n',
+    '请放松眼睛，稍作休息。\n\n',
+    '准备好后按【空格键】继续。\n',
+  ].join(''),
+
+  END_MSG: [
+    '实验全部结束！\n\n',
+    '感谢您的参与。\n\n',
+    '数据已保存，您可以关闭页面。\n',
+  ].join(''),
+};
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第2部分：DOM 引用与工具函数
+// ═════════════════════════════════════════════════════════════════════
+
+const $ = id => document.getElementById(id);
+const el = {
+  textScreen: $('text-screen'),
+  textContent: $('text-content'),
+  textHint: $('text-hint'),
+  stimulusLayer: $('stimulus-layer'),
+  fixation: $('fixation'),
+  t1: $('t1-stim'),
+  t2: $('t2-stim'),
+  statusBar: $('status-bar'),
+  touchBtns: $('touch-buttons'),
+};
+
+/** 等待指定毫秒 */
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/** 隐藏所有刺激 */
+function hideAllStimuli() {
+  el.fixation.classList.remove('visible');
+  el.t1.classList.remove('visible');
+  el.t2.classList.remove('visible');
+}
+
+/** 显示指定的刺激 */
+function show(elmt) { elmt.classList.add('visible'); }
+function hide(elmt) { elmt.classList.remove('visible'); }
+
+/** 设置 T1 图片 */
+function setT1Image(path) {
+  el.t1.src = path;
+  el.t1.onerror = () => { el.t1.src = ''; console.warn('T1图片加载失败:', path); };
+}
+
+/** 设置 T2 图片 */
+function setT2Image(path) {
+  el.t2.src = path;
+  el.t2.onerror = () => { el.t2.src = ''; console.warn('T2图片加载失败:', path); };
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第3部分：反应收集器
+// ═════════════════════════════════════════════════════════════════════
+
+class ResponseCollector {
+  constructor(maxWaitMs) {
+    this.maxWait = maxWaitMs;
+    this.t1 = null;            // { key, rt }
+    this.t2 = null;            // { key, rt }
+    this.t1Onset = null;
+    this.t2Onset = null;
+    this._resolve = null;
+    this._handler = null;
+    this._timer = null;
+    this._touchHandler = null;
+  }
+
+  start(t1Onset) {
+    this.t1Onset = t1Onset;
+    this.t1 = null; this.t2 = null;
+    this.t2Onset = null;
+
+    return new Promise(resolve => {
+      this._resolve = resolve;
+
+      // 键盘监听
+      this._handler = e => {
+        if (e.repeat) return;
+        const now = performance.now();
+
+        // T1: F / J
+        if ((e.key === 'f' || e.key === 'j') && !this.t1) {
+          this.t1 = { key: e.key, rt: now - this.t1Onset };
+        }
+        // T2: ↑ / ↓
+        if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !this.t2 && this.t2Onset) {
+          this.t2 = { key: e.key, rt: now - this.t2Onset };
+        }
+        this._checkDone();
+      };
+      document.addEventListener('keydown', this._handler);
+
+      // 触屏按钮监听
+      this._touchHandler = e => {
+        const btn = e.currentTarget;
+        const now = performance.now();
+        const task = btn.dataset.task;
+        const key = btn.dataset.key;
+
+        if (task === 't1' && !this.t1) {
+          this.t1 = { key, rt: now - this.t1Onset };
+        }
+        if (task === 't2' && !this.t2 && this.t2Onset) {
+          this.t2 = { key, rt: now - this.t2Onset };
+        }
+        this._checkDone();
+      };
+      document.querySelectorAll('.touch-btn').forEach(b => {
+        b.addEventListener('click', this._touchHandler);
+      });
+
+      // 触屏按钮显示（移动端）
+      el.touchBtns.classList.add('active');
+
+      // 超时
+      this._timer = setTimeout(() => this._finish(), this.maxWait);
+    });
+  }
+
+  setT2Onset(t2Onset) {
+    this.t2Onset = t2Onset;
+  }
+
+  _checkDone() {
+    if (this.t1 && this.t2) this._finish();
+  }
+
+  _finish() {
+    if (this._timer) clearTimeout(this._timer);
+    document.removeEventListener('keydown', this._handler);
+    document.querySelectorAll('.touch-btn').forEach(b => {
+      b.removeEventListener('click', this._touchHandler);
+    });
+    el.touchBtns.classList.remove('active');
+    if (this._resolve) this._resolve({ t1: this.t1, t2: this.t2 });
+  }
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第4部分：音频控制
+// ═════════════════════════════════════════════════════════════════════
+
+const AudioController = {
+  _current: null,
+  _elements: {},
+
+  init() {
+    // 预创建 audio 元素
+    for (const type of ['white_noise', 'speech']) {
+      const audio = new Audio();
+      audio.loop = true;
+      audio.volume = 0.5;
+      audio.preload = 'auto';
+      this._elements[type] = audio;
+    }
+    this._elements.white_noise.src = `${CONFIG.ASSETS_BASE}/audio/白噪音.mp3`;
+    this._elements.speech.src = `${CONFIG.ASSETS_BASE}/audio/无序母语单字语音.mp3`;
+  },
+
+  async play(type) {
+    this.stop();
+    const audio = this._elements[type];
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+      await audio.play();
+      this._current = audio;
+    } catch (e) {
+      console.warn('音频播放失败（浏览器自动播放策略）:', e.message);
+    }
+  },
+
+  stop() {
+    if (this._current) {
+      this._current.pause();
+      this._current.currentTime = 0;
+      this._current = null;
+    }
+  },
+};
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第5部分：试次列表生成
+// ═════════════════════════════════════════════════════════════════════
+
+/** Fisher-Yates 洗牌 */
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** 生成图片路径表 */
+function buildAssetIndex() {
+  const base = CONFIG.ASSETS_BASE;
+  const idx = { t1: { have: [], no: [] }, t2: [], digitMap: {} };
+
+  // 含 T 矩阵 (matrix_T_01 ~ matrix_T_20)
+  for (let i = 1; i <= 20; i++) {
+    const n = String(i).padStart(2, '0');
+    idx.t1.have.push(`${base}/images/含T矩阵/matrix_T_${n}.png`);
+    idx.t1.no.push(`${base}/images/无T矩阵/matrix_noT_${n}.png`);
+  }
+
+  // 数字 (digit_1 ~ digit_9, 不含5)
+  const digits = [1,2,3,4,6,7,8,9];
+  for (const d of digits) {
+    const path = `${base}/images/数字刺激/digit_${d}.png`;
+    idx.t2.push(path);
+    idx.digitMap[d] = path;
+  }
+
+  return idx;
+}
+
+const ASSETS = buildAssetIndex();
+
+/** 生成单个试次的参数 */
+function makeTrial(audioType, soaMs, hasT, digit) {
+  const t1List = hasT ? ASSETS.t1.have : ASSETS.t1.no;
+  const t1Img = t1List[Math.floor(Math.random() * t1List.length)];
+  const t2Img = ASSETS.digitMap[digit];
+  return { audioType, soaMs, hasT, digit, t1Img, t2Img };
+}
+
+/** 生成试次列表 */
+function generateTrials(audioType, nPerCondition) {
+  const trials = [];
+  for (const soa of CONFIG.SOA_LEVELS) {
+    for (let i = 0; i < nPerCondition; i++) {
+      const hasT = Math.random() < 0.5;
+      const digits = [1,2,3,4,6,7,8,9];
+      const digit = digits[Math.floor(Math.random() * digits.length)];
+      trials.push(makeTrial(audioType, soa, hasT, digit));
+    }
+  }
+  return shuffle(trials);
+}
+
+function generatePracticeTrials() {
+  const n = CONFIG.PRACTICE_TRIALS;
+  const trials = [];
+  for (let i = 0; i < n; i++) {
+    const soa = CONFIG.SOA_LEVELS[i % CONFIG.SOA_LEVELS.length];
+    const hasT = Math.random() < 0.5;
+    const digits = [1,2,3,4,6,7,8,9];
+    const digit = digits[Math.floor(Math.random() * digits.length)];
+    trials.push(makeTrial('none', soa, hasT, digit));
+  }
+  return shuffle(trials);
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第6部分：核心实验 —— 文本屏幕 / 单试次 / Block
+// ═════════════════════════════════════════════════════════════════════
+
+function showTextScreen(text, showHint = true) {
+  return new Promise(resolve => {
+    el.textContent.textContent = text;
+    el.textHint.style.display = showHint ? '' : 'none';
+    el.textScreen.style.display = 'flex';
+
+    const handler = e => {
+      if (e.key === ' ' || e.key === 'Escape') {
+        document.removeEventListener('keydown', handler);
+        el.textScreen.style.display = 'none';
+        if (e.key === 'Escape') {
+          AudioController.stop();
+          resolve('QUIT');
+        } else {
+          resolve('OK');
+        }
+      }
+    };
+    document.addEventListener('keydown', handler);
+  });
+}
+
+/** 运行单个试次 */
+async function runOneTrial(trial) {
+  hideAllStimuli();
+
+  // 设置图片
+  setT1Image(trial.t1Img);
+  setT2Image(trial.t2Img);
+
+  // 注视点
+  const fixDuration = CONFIG.FIX_MIN + Math.random() * (CONFIG.FIX_MAX - CONFIG.FIX_MIN);
+  show(el.fixation);
+  await sleep(fixDuration);
+  hide(el.fixation);
+  await sleep(50);  // 短暂空白避免视觉残留
+
+  // ====== T1 ONSET ======
+  const t1Onset = performance.now();
+  show(el.t1);
+
+  // ====== 启动反应收集 ======
+  const collector = new ResponseCollector(CONFIG.RESPONSE_TIMEOUT);
+  const respPromise = collector.start(t1Onset);
+
+  // ====== T2 ONSET (at SOA) ======
+  await sleep(trial.soaMs);
+  const t2Onset = performance.now();
+  show(el.t2);
+  collector.setT2Onset(t2Onset);
+
+  // ====== 刺激关闭时序 ======
+  // T1 在 onset 后 200ms 关闭
+  const t1Elapsed = performance.now() - t1Onset;
+  const t1Remaining = CONFIG.STIM_DURATION - t1Elapsed;
+  if (t1Remaining > 0) await sleep(t1Remaining);
+  hide(el.t1);
+
+  // T2 在 onset 后 200ms 关闭
+  const t2Elapsed = performance.now() - t2Onset;
+  const t2Remaining = CONFIG.STIM_DURATION - t2Elapsed;
+  if (t2Remaining > 0) await sleep(t2Remaining);
+  hide(el.t2);
+
+  // ====== 等待反应 / 超时 ======
+  const responses = await respPromise;
+
+  // ====== ITI ======
+  hideAllStimuli();
+  await sleep(CONFIG.ITI);
+
+  // ====== 计算正确性 ======
+  const expectedT1 = trial.hasT ? 'f' : 'j';
+  const t1Correct = responses.t1 ? (responses.t1.key === expectedT1 ? 1 : 0) : 0;
+  const isOdd = trial.digit % 2 === 1;
+  const expectedT2 = isOdd ? 'ArrowUp' : 'ArrowDown';
+  const t2Correct = responses.t2 ? (responses.t2.key === expectedT2 ? 1 : 0) : 0;
+
+  return {
+    subject: window._subjectId || 'test',
+    trial: window._trialCounter++,
+    blockType: trial.audioType,
+    soaMs: trial.soaMs,
+    hasT: trial.hasT ? 1 : 0,
+    digit: trial.digit,
+    t1Img: trial.t1Img.split('/').pop(),
+    t2Img: trial.t2Img.split('/').pop(),
+    t1Resp: responses.t1 ? responses.t1.key : 'miss',
+    t1RtMs: responses.t1 ? Math.round(responses.t1.rt) : '',
+    t1Correct,
+    t2Resp: responses.t2 ? responses.t2.key : 'miss',
+    t2RtMs: responses.t2 ? Math.round(responses.t2.rt) : '',
+    t2Correct,
+  };
+}
+
+/** 运行一个 Block */
+async function runBlock(trials, label) {
+  const n = trials.length;
+  const blockData = [];
+
+  for (let i = 0; i < n; i++) {
+    const pct = ((i + 1) / n * 100).toFixed(0);
+    el.statusBar.textContent = `${label}  |  进度 ${i+1}/${n} (${pct}%)`;
+    const record = await runOneTrial(trials[i]);
+    blockData.push(record);
+    window._allData.push(record);
+  }
+
+  el.statusBar.textContent = '';
+
+  // Block 汇总
+  const validT2 = blockData.filter(d => d.t2RtMs !== '' && d.t2Correct === 1);
+  const t2Rts = validT2.map(d => d.t2RtMs);
+  const t1Acc = blockData.reduce((s, d) => s + d.t1Correct, 0) / n * 100;
+  const t2Acc = blockData.reduce((s, d) => s + d.t2Correct, 0) / n * 100;
+  const t2Mean = t2Rts.length ? t2Rts.reduce((a, b) => a + b, 0) / t2Rts.length : 0;
+
+  await showTextScreen(
+    `${label} 完成！\n\n任务一正确率: ${t1Acc.toFixed(1)}%\n任务二正确率: ${t2Acc.toFixed(1)}%\n任务二平均反应时: ${t2Mean.toFixed(0)} ms`
+  );
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第7部分：数据导出
+// ═════════════════════════════════════════════════════════════════════
+
+function downloadCSV() {
+  const fields = [
+    'subject','trial','blockType','soaMs','hasT','digit',
+    't1Img','t2Img','t1Resp','t1RtMs','t1Correct',
+    't2Resp','t2RtMs','t2Correct'
+  ];
+  const rows = window._allData.map(d =>
+    fields.map(f => {
+      const v = d[f];
+      return v === '' ? '' : `"${String(v).replace(/"/g, '""')}"`;
+    }).join(',')
+  );
+  const csv = '﻿' + fields.join(',') + '\n' + rows.join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `PRP_${window._subjectId || 'test'}_${new Date().toISOString().slice(0,19).replace(/[:-]/g,'')}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第8部分：实验总流程
+// ═════════════════════════════════════════════════════════════════════
+
+async function runExperiment() {
+  window._trialCounter = 1;
+  window._allData = [];
+
+  // 从 URL 获取被试编号（支持见数传参）
+  const params = new URLSearchParams(window.location.search);
+  window._subjectId = params.get('subject_id') || params.get('participant_id') || 'test';
+
+  // 初始化音频
+  AudioController.init();
+
+  // 1) 主指导语
+  let res = await showTextScreen(CONFIG.INSTRUCTION);
+  if (res === 'QUIT') return;
+
+  // 2) 练习说明
+  res = await showTextScreen(CONFIG.PRACTICE_INSTRUCTION);
+  if (res === 'QUIT') return;
+
+  // 3) 练习
+  const practiceTrials = generatePracticeTrials();
+  await runBlock(practiceTrials, '练习');
+  if (res === 'QUIT') return;
+
+  // 4) 正式实验说明
+  res = await showTextScreen(CONFIG.PRACTICE_DONE);
+  if (res === 'QUIT') return;
+
+  // 5) 正式实验——Block顺序（被试编号奇偶平衡）
+  const num = parseInt(window._subjectId) || 1;
+  const isOdd = num % 2 === 1;
+  const order = isOdd
+    ? [['white_noise', '第一部分（白噪音条件）'],
+       ['speech',      '第二部分（单字语音条件）']]
+    : [['speech',      '第一部分（单字语音条件）'],
+       ['white_noise', '第二部分（白噪音条件）']];
+
+  for (let idx = 0; idx < order.length; idx++) {
+    const [audioType, label] = order[idx];
+    const trials = generateTrials(audioType, CONFIG.TRIALS_PER_CONDITION);
+
+    // 播放音频
+    if (audioType !== 'none') await AudioController.play(audioType);
+
+    await runBlock(trials, label);
+    AudioController.stop();
+
+    if (idx < order.length - 1) {
+      res = await showTextScreen(CONFIG.BREAK_MSG);
+      if (res === 'QUIT') return;
+    }
+  }
+
+  // 6) 保存 & 结束
+  downloadCSV();
+
+  // 向父页面发送数据（iframe 嵌入时用）
+  if (window.parent !== window) {
+    window.parent.postMessage({
+      type: 'experimentData',
+      data: window._allData,
+      subjectId: window._subjectId,
+    }, '*');
+  }
+
+  // 统计汇总
+  printSummary(window._allData);
+
+  await showTextScreen(CONFIG.END_MSG);
+}
+
+/** 控制台打印汇总 */
+function printSummary(data) {
+  const groups = {};
+  for (const d of data) {
+    if (d.blockType === 'none') continue;  // 跳过练习
+    const key = `${d.blockType}_${d.soaMs}`;
+    if (!groups[key]) groups[key] = { t2rt: [], t2c: [], t1c: [] };
+    if (d.t2RtMs !== '') groups[key].t2rt.push(d.t2RtMs);
+    groups[key].t2c.push(d.t2Correct);
+    groups[key].t1c.push(d.t1Correct);
+  }
+
+  console.log('\n' + '='.repeat(70));
+  console.log('  实验汇总');
+  console.log('='.repeat(70));
+  console.log('音频类型\tSOA\tT1正确率\tT2正确率\tT2平均RT\tN');
+  console.log('-'.repeat(70));
+
+  for (const key of Object.keys(groups).sort()) {
+    const g = groups[key];
+    const name = key.includes('white_noise') ? '白噪音' : '语音';
+    const soa = key.split('_')[1];
+    const t1a = (g.t1c.reduce((a,b) => a+b, 0) / g.t1c.length * 100).toFixed(1);
+    const t2a = (g.t2c.reduce((a,b) => a+b, 0) / g.t2c.length * 100).toFixed(1);
+    const meanRT = g.t2rt.length ? (g.t2rt.reduce((a,b) => a+b, 0) / g.t2rt.length).toFixed(1) : '-';
+    console.log(`${name}\tSOA=${soa}ms\t${t1a}%\t${t2a}%\t${meanRT}ms\t${g.t2rt.length}`);
+  }
+  console.log('='.repeat(70));
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+//  第9部分：入口
+// ═════════════════════════════════════════════════════════════════════
+
+// 页面加载完成后启动实验
+document.addEventListener('DOMContentLoaded', () => {
+  // 先请求全屏（仅桌面端）
+  try { document.documentElement.requestFullscreen?.(); } catch(e) {}
+
+  // 小延迟后开始
+  setTimeout(runExperiment, 500);
+});
+</script>
+</body>
+</html>
