@@ -86,10 +86,10 @@
   #t1-stim {
     position: absolute;
     left: 50%;
-    top: 38%;
+    top: 30%;
     transform: translate(-50%, -50%);
-    width: 360px;
-    height: 360px;
+    width: 280px;
+    height: 280px;
     object-fit: contain;
   }
 
@@ -97,10 +97,10 @@
   #t2-stim {
     position: absolute;
     left: 50%;
-    top: 66%;
+    top: 72%;
     transform: translate(-50%, -50%);
-    width: 360px;
-    height: 360px;
+    width: 280px;
+    height: 280px;
     object-fit: contain;
   }
 
@@ -188,16 +188,16 @@
   @media (max-width: 768px) {
     #text-screen .content { font-size: 18px; padding: 20px; }
     #text-screen .hint   { font-size: 16px; }
-    #t1-stim { width: 240px; height: 240px; left: 50%; top: 35%; }
-    #t2-stim { width: 240px; height: 240px; left: 50%; top: 65%; }
+    #t1-stim { width: 200px; height: 200px; left: 50%; top: 28%; }
+    #t2-stim { width: 200px; height: 200px; left: 50%; top: 72%; }
     .touch-btn { padding: 14px 24px; font-size: 18px; min-width: 80px; }
     #status-bar { font-size: 16px; bottom: 170px; }
     #feedback-text { font-size: 32px; }
   }
   @media (max-width: 480px) {
     #text-screen .content { font-size: 15px; }
-    #t1-stim { width: 200px; height: 200px; left: 50%; top: 33%; }
-    #t2-stim { width: 200px; height: 200px; left: 50%; top: 64%; }
+    #t1-stim { width: 160px; height: 160px; left: 50%; top: 26%; }
+    #t2-stim { width: 160px; height: 160px; left: 50%; top: 74%; }
     .touch-btn { padding: 12px 18px; font-size: 16px; min-width: 65px; }
     #feedback-text { font-size: 24px; }
   }
@@ -356,7 +356,7 @@ const CONFIG = {
   STIM_DURATION_T2: 350,                  // T2数字 350ms
   FIX_MIN: 500, FIX_MAX: 1000,            // 注视点抖动范围 ms
   ITI: 200,                                // 试次间隔 ms
-  RESPONSE_TIMEOUT: 2300,                  // 白色空屏等待反应 ms（刺激消失后起算）
+  RESPONSE_TIMEOUT: 2300,                  // 反应超时 2300ms（从T1 onset计）
   PRACTICE_TRIALS: 12,
   TRIALS_PER_CONDITION: 30,
 
@@ -714,7 +714,7 @@ async function runOneTrial(trial, isPractice = false) {
   setT1Image(trial.t1Img);
   setT2Image(trial.t2Img);
 
-  // 注视点
+  // 注视点（500~1000ms 随机抖动防预期）
   const fixDuration = CONFIG.FIX_MIN + Math.random() * (CONFIG.FIX_MAX - CONFIG.FIX_MIN);
   show(el.fixation);
   await sleep(fixDuration);
@@ -892,13 +892,9 @@ async function runExperiment() {
   res = await showTextScreen(CONFIG.PRACTICE_INSTRUCTION);
   if (res === 'QUIT') return;
 
-  // 3) 练习
+  // 3) 练习（12试次，有反馈）
   const practiceTrials = generatePracticeTrials();
   await runBlock(practiceTrials, '练习', true);
-  if (res === 'QUIT') return;
-
-  // 4) 正式实验说明
-  res = await showTextScreen(CONFIG.PRACTICE_DONE);
   if (res === 'QUIT') return;
 
   // 5) 正式实验——Block顺序（被试编号奇偶平衡）
