@@ -162,11 +162,108 @@
     #t2-stim { width: 130px; height: 130px; }
     .touch-btn { padding: 12px 18px; font-size: 16px; min-width: 65px; }
   }
+
+  /* ======== 被试信息对话框 ======== */
+  #info-dialog {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 999;
+  }
+  #info-dialog.hidden { display: none; }
+  #info-dialog .box {
+    background: #1a1a1a;
+    border: 1px solid #444;
+    border-radius: 16px;
+    padding: 50px 60px;
+    max-width: 420px;
+    width: 90%;
+  }
+  #info-dialog h2 {
+    text-align: center;
+    font-size: 26px;
+    margin-bottom: 30px;
+    color: #eee;
+    font-weight: normal;
+  }
+  #info-dialog .field {
+    margin-bottom: 20px;
+  }
+  #info-dialog .field label {
+    display: block;
+    font-size: 16px;
+    color: #aaa;
+    margin-bottom: 6px;
+  }
+  #info-dialog .field input,
+  #info-dialog .field select {
+    width: 100%;
+    padding: 12px 16px;
+    font-size: 18px;
+    background: #2a2a2a;
+    border: 1px solid #555;
+    border-radius: 8px;
+    color: #fff;
+    outline: none;
+    box-sizing: border-box;
+  }
+  #info-dialog .field input:focus,
+  #info-dialog .field select:focus {
+    border-color: #7af;
+  }
+  #info-dialog .field select {
+    appearance: auto;
+  }
+  #info-dialog .btn-start {
+    width: 100%;
+    padding: 14px;
+    font-size: 20px;
+    background: #3a7bd5;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    margin-top: 10px;
+  }
+  #info-dialog .btn-start:hover {
+    background: #4a8be5;
+  }
+  #info-dialog .btn-start:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
 </style>
 </head>
 <body>
 
 <div id="experiment">
+  <!-- 被试信息对话框 -->
+  <div id="info-dialog">
+    <div class="box">
+      <h2>被试信息</h2>
+      <div class="field">
+        <label>被试编号</label>
+        <input type="text" id="input-id" placeholder="请输入编号" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>年龄</label>
+        <input type="number" id="input-age" placeholder="请输入年龄" min="1" max="120">
+      </div>
+      <div class="field">
+        <label>性别</label>
+        <select id="input-gender">
+          <option value="">请选择</option>
+          <option value="男">男</option>
+          <option value="女">女</option>
+        </select>
+      </div>
+      <button class="btn-start" id="btn-start">开始实验</button>
+    </div>
+  </div>
+
   <!-- 文本屏幕 -->
   <div id="text-screen">
     <div class="content" id="text-content"></div>
@@ -616,6 +713,8 @@ async function runOneTrial(trial) {
 
   return {
     subject: window._subjectId || 'test',
+    age: window._subjectAge || '',
+    gender: window._subjectGender || '',
     trial: window._trialCounter++,
     blockType: trial.audioType,
     soaMs: trial.soaMs,
@@ -666,7 +765,7 @@ async function runBlock(trials, label) {
 
 function downloadCSV() {
   const fields = [
-    'subject','trial','blockType','soaMs','hasT','digit',
+    'subject','age','gender','trial','blockType','soaMs','hasT','digit',
     't1Img','t2Img','t1Resp','t1RtMs','t1Correct',
     't2Resp','t2RtMs','t2Correct'
   ];
@@ -798,13 +897,45 @@ function printSummary(data) {
 //  第9部分：入口
 // ═════════════════════════════════════════════════════════════════════
 
-// 页面加载完成后启动实验
+// 页面加载完成后弹出被试信息对话框
 document.addEventListener('DOMContentLoaded', () => {
-  // 先请求全屏（仅桌面端）
-  try { document.documentElement.requestFullscreen?.(); } catch(e) {}
+  const dialog = document.getElementById('info-dialog');
+  const btnStart = document.getElementById('btn-start');
+  const inputId = document.getElementById('input-id');
+  const inputAge = document.getElementById('input-age');
+  const inputGender = document.getElementById('input-gender');
 
-  // 小延迟后开始
-  setTimeout(runExperiment, 500);
+  // 如果 URL 已有 subject_id 参数，自动填入
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('subject_id')) inputId.value = urlParams.get('subject_id');
+
+  // 检查输入是否完整
+  function checkForm() {
+    btnStart.disabled = !(inputId.value.trim() && inputAge.value && inputGender.value);
+  }
+  inputId.addEventListener('input', checkForm);
+  inputAge.addEventListener('input', checkForm);
+  inputGender.addEventListener('change', checkForm);
+  checkForm();
+
+  // 点击开始
+  btnStart.addEventListener('click', () => {
+    window._subjectId = inputId.value.trim();
+    window._subjectAge = inputAge.value;
+    window._subjectGender = inputGender.value;
+    dialog.classList.add('hidden');
+
+    // 请求全屏
+    try { document.documentElement.requestFullscreen?.(); } catch(e) {}
+
+    // 启动实验
+    setTimeout(runExperiment, 300);
+  });
+
+  // 回车提交
+  inputGender.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !btnStart.disabled) btnStart.click();
+  });
 });
 </script>
 </body>
