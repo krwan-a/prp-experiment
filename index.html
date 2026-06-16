@@ -797,6 +797,28 @@ function downloadCSV() {
 //  第8部分：实验总流程
 // ═════════════════════════════════════════════════════════════════════
 
+/** 预加载所有图片资源 */
+async function preloadAssets() {
+  const allPaths = [...ASSETS.t1.have, ...ASSETS.t1.no, ...ASSETS.t2];
+  const total = allPaths.length;
+  el.textContent.textContent = '资源加载中...\n0%';
+  el.textHint.style.display = 'none';
+  el.textScreen.style.display = 'flex';
+
+  let loaded = 0;
+  const promises = allPaths.map(path => new Promise(resolve => {
+    const img = new Image();
+    img.onload = img.onerror = () => {
+      loaded++;
+      el.textContent.textContent = `资源加载中...${Math.round(loaded/total*100)}%`;
+      resolve();
+    };
+    img.src = path;
+  }));
+  await Promise.all(promises);
+  el.textScreen.style.display = 'none';
+}
+
 async function runExperiment() {
   window._trialCounter = 1;
   window._allData = [];
@@ -806,6 +828,9 @@ async function runExperiment() {
     const params = new URLSearchParams(window.location.search);
     window._subjectId = params.get('subject_id') || params.get('participant_id') || 'test';
   }
+
+  // 预加载所有图片
+  await preloadAssets();
 
   // 初始化音频
   AudioController.init();
