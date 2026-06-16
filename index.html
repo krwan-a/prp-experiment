@@ -801,9 +801,11 @@ async function runExperiment() {
   window._trialCounter = 1;
   window._allData = [];
 
-  // 从 URL 获取被试编号（支持见数传参）
-  const params = new URLSearchParams(window.location.search);
-  window._subjectId = params.get('subject_id') || params.get('participant_id') || 'test';
+  // 被试编号：对话框输入优先，若无则从URL获取
+  if (!window._subjectId) {
+    const params = new URLSearchParams(window.location.search);
+    window._subjectId = params.get('subject_id') || params.get('participant_id') || 'test';
+  }
 
   // 初始化音频
   AudioController.init();
